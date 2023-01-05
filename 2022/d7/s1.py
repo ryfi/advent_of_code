@@ -76,25 +76,32 @@ Find all of the directories with a total size of at most 100000. What is the sum
 """
 
 from dataclasses import dataclass, field
-from io import TextIOWrapper
+
+from typing import List
+
 
 @dataclass
 class File:
     name: str = ''
     size: int = 0
 
+
 @dataclass
 class Directory(File):
     # name: str = ''
     # size: int = 0
     files: list[File] = field(default_factory=list)
-    subdirectories: list['Directory'] = field(default_factory=list)
+    subdirectories: dict[str, 'Directory'] = field(default_factory=dict)
+
+    def __iter__(self):
+        for _, sub_dir in self.subdirectories.items():
+            yield sub_dir
 
     def _update_total_size(self):
         self.size = sum([file.size for file in self.files if file is not None]) + \
-                    sum([subdir.total_size() for subdir in self.subdirectories if subdir is not None])
+                    sum([self.subdirectories[subdir].total_size() for subdir in self.subdirectories])
 
-    def total_size(self):
+    def total_size(self) -> int:
         # total = sum([file.size for file in self.files if file is not None]) + \
         #         sum([subdir.total_size() for subdir in self.subdirectories if subdir is not None])
         # self.size = total
@@ -102,13 +109,14 @@ class Directory(File):
         return self.size
 
     def sum_size_under(self, max_size: int):
+
         file_sum = 0
         dir_sum = 0
         for file in self.files:
             if file.size < max_size:
                 file_sum += file.size
         for directory in self.subdirectories:
-            subdir_sum = directory.total_size()
+            subdir_sum = self.subdirectories[directory].total_size()
             if subdir_sum < max_size:
                 dir_sum += subdir_sum
         if self.size < max_size:
@@ -116,59 +124,52 @@ class Directory(File):
         return file_sum + dir_sum
 
 
-# def parse_dir_contents(f: TextIOWrapper, current_pos: Directory):
-#     last_line = ''
-#     for line in f:
-#         if line.startswith('$'):
-#             last_line = line
-#             break
-#         else:
-#             line_content = line.split()
-#             if line_content[0] == 'dir':
-#                 current_pos.subdirectories.append(Directory(name=line_content[1]))
-#             else:
-#                 current_pos.files.append(File(name=line_content[1],
-#                                               size=int(line_content[0])))
-#     _ = current_pos.total_size()
-#     return last_line
+def get_from_directory(hd: Directory, pwd_list: list) -> Directory:
+    if len(pwd_list) == 1:
+        return hd.subdirectories[pwd_list[0]]
+    else:
+        return get_from_directory(hd=hd.subdirectories[pwd_list[0]],
+                                  pwd_list=pwd_list[1:])
 
-# def navigate_directories():
-#     pass
 
-if __name__ == '__main__':
-    with open('input.txt', 'r') as f:
-        line = f.readline()
-        hard_drive = {'/': Directory(name='/')}  # redundant?
+def sum_size_under(hd: Directory, max_size: int) -> int:
+    hd.total_size()
+    total = 0
+    if len(hd.subdirectories) > 0:
+        for _, sub_dir in hd.subdirectories.items():
+            total += sum_size_under(hd=sub_dir, max_size=max_size)
+    if hd.size < max_size:
+        total += hd.size
+    return total
+
+
+def map_hard_drive(f_path) -> Directory:
+    with open(f_path, 'r') as f:
+        _ = f.readline()
+        hd = Directory(name='hard_drive', subdirectories={'/': Directory(name='/')})
         pwd = ['/']
         for line in f:
-            # if line.startswith('$ cd'):
-            #     dir_name = line.split()[-1]
-            #     if dir_name == '..':
-            #         _ = pwd.pop()
-            #     elif dir_name == '/':
-            #         pwd = ['/']
-            #     else:
-            #         hard_drive[dir_name] = Directory(name=dir_name)
-            #         pwd.append(dir_name)
-            # elif line.startswith('$ ls'):
             match line.split():
                 case ['$', 'cd', '/']:
+                    # root
                     pwd = ['/']
-                    print('root')
                 case ['$', 'cd', '..']:
+                    # moved up
                     pwd.pop()
-                    print('moved up', pwd)
                 case ['$', 'cd', x]:
                     pwd.append(x)
-                    print(x, pwd)
                 case ['$', 'ls']:
-                    print('listing content')
-                    hard_drive[''.join(pwd)] = Directory(name=''.join(pwd))
+                    # listing content
+                    pass
                 case ['dir', dir_name]:
-                    print('directory name', dir_name)
-                    hard_drive[''.join(pwd)].subdirectories.append(dir_name)
+                    current_dir = get_from_directory(hd, pwd)
+                    current_dir.subdirectories[dir_name] = Directory(name=dir_name)
                 case [file_size, file_name]:
-                    print(file_size, file_name)
+                    current_dir = get_from_directory(hd, pwd)
+                    current_dir.files.append(File(name=file_name, size=int(file_size)))
+    return hd
 
 
-
+if __name__ == '__main__':
+    hd = map_hard_drive('input.txt')
+    print(sum_size_under(hd, 100000))
