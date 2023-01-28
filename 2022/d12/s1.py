@@ -33,7 +33,7 @@ import numpy as np
 from collections import deque
 
 
-def connected_neighbors(node: tuple, grid: np.ndarray) -> tuple[int, tuple[int, int], int]:
+def connected_neighbors(node: tuple[int, int], grid: np.ndarray) -> tuple[int, tuple[int, int], int]:
     for direction in [
         (node[0] + 1, node[1]),  # down
         (node[0] - 1, node[1]),  # up
